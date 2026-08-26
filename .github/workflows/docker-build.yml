@@ -6,18 +6,23 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '镜像版本号（如 latest 或 1.0.0）'
+        description: '镜像版本号（如 1.0.0，latest 亦可）'
         required: false
-        default: 'latest'
+        default: '1.0.0'
         type: string
       push_image:
-        description: '构建完成后推送镜像（否则仅验证构建）'
+        description: '推送镜像到 registry（否则仅构建镜像文件）'
+        required: false
+        default: true
+        type: boolean
+      create_release:
+        description: '创建 Release 并附上镜像文件'
         required: false
         default: true
         type: boolean
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
@@ -33,6 +38,51 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Determine version
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            VERSION="${{ inputs.version }}"
+          fi
+          # latest 版本号对 release tag 无意义，换用日期
+          if [ "$VERSION" = "latest" ] || [ -z "$VERSION" ]; then
+            VERSION="$(date +%Y%m%d)"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      # ===== 构建镜像文件（docker load 可加载）=====
+      # 每个架构单独 build --load 到本地 daemon，再 docker save 导出 tar.gz
+      - name: Build amd64 image locally
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: trae-signin:amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build arm64 image locally
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          load: true
+          tags: trae-signin:arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Export image files
+        run: |
+          V=${{ steps.ver.outputs.version }}
+          docker save trae-signin:amd64 | gzip > trae-signin-web_${V}_linux_amd64.tar.gz
+          docker save trae-signin:arm64 | gzip > trae-signin-web_${V}_linux_arm64.tar.gz
+          ls -lh trae-signin-web_*.tar.gz
+
+      # ===== 推送多架构镜像到 registry（可选）=====
       - name: Login to GitHub Container Registry
         if: github.event_name == 'push' || inputs.push_image == true
         uses: docker/login-action@v3
@@ -40,6 +90,18 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push multi-arch image (GHCR)
+        if: github.event_name == 'push' || inputs.push_image == true
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/trae-signin-web:latest
+            ghcr.io/${{ github.repository_owner }}/trae-signin-web:${{ steps.ver.outputs.version }}
+          cache-from: type=gha
 
       # 可选：同时推送到 Docker Hub（配置 DOCKERHUB_USERNAME / DOCKERHUB_TOKEN secrets 后自动启用）
       - name: Check Docker Hub config
@@ -56,29 +118,6 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Determine version
-        id: ver
-        run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            VERSION="${GITHUB_REF#refs/tags/v}"
-          else
-            VERSION="${{ inputs.version }}"
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Building version: $VERSION"
-
-      - name: Build and push multi-arch image (GHCR)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name == 'push' || inputs.push_image == true }}
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/trae-signin-web:latest
-            ghcr.io/${{ github.repository_owner }}/trae-signin-web:${{ steps.ver.outputs.version }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
       - name: Build and push multi-arch image (Docker Hub)
         if: (github.event_name == 'push' || inputs.push_image == true) && steps.dh.outputs.enabled == '1'
         uses: docker/build-push-action@v6
@@ -90,9 +129,47 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/trae-signin-web:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/trae-signin-web:${{ steps.ver.outputs.version }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
 
-      - name: Inspect image
-        if: github.event_name == 'push' || inputs.push_image == true
-        run: |
-          docker buildx imagetools inspect ghcr.io/${{ github.repository_owner }}/trae-signin-web:${{ steps.ver.outputs.version }}
+      # ===== 创建 Release 并附上镜像文件 =====
+      - name: Create Release with image files
+        if: github.event_name == 'push' || inputs.create_release == true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: v${{ steps.ver.outputs.version }}
+          body: |
+            ## trae-signin-web v${{ steps.ver.outputs.version }}
+
+            ### 镜像文件（下载后 docker load 本地加载）
+
+            | 文件 | 架构 | 适用设备 |
+            |---|---|---|
+            | `trae-signin-web_${{ steps.ver.outputs.version }}_linux_amd64.tar.gz` | amd64 | 普通 PC / 服务器 / 云主机 |
+            | `trae-signin-web_${{ steps.ver.outputs.version }}_linux_arm64.tar.gz` | arm64 | 树莓派 / ARM 服务器 |
+
+            #### 本地加载运行
+
+            ```bash
+            # 加载镜像（以 amd64 为例）
+            docker load -i trae-signin-web_${{ steps.ver.outputs.version }}_linux_amd64.tar.gz
+            docker tag trae-signin:amd64 trae-signin-web:latest
+
+            # 运行
+            docker run -d --name trae-signin \
+              -p 9090:9090 \
+              -v /opt/trae-signin/data:/app/data \
+              -e TZ=Asia/Shanghai \
+              --restart unless-stopped \
+              trae-signin-web:latest
+            ```
+
+            #### 也可直接从 GHCR 拉取
+
+            ```bash
+            docker pull ghcr.io/${{ github.repository_owner }}/trae-signin-web:${{ steps.ver.outputs.version }}
+            ```
+          files: |
+            trae-signin-web_*_linux_amd64.tar.gz
+            trae-signin-web_*_linux_arm64.tar.gz
+          draft: false
+          prerelease: false
