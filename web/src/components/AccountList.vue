@@ -53,6 +53,47 @@ async function del(a: Account) {
     await store.loadAccounts()
   } catch (e: any) { store.showToast(e.message) }
 }
+
+// ===== 配置导出 / 导入 =====
+const fileInput = ref<HTMLInputElement | null>(null)
+
+async function exportConfig() {
+  if (store.accounts.length === 0) { store.showToast('没有账号可导出'); return }
+  if (!confirm('导出文件包含账号登录凭证和设备密钥，请妥善保管。继续导出？')) return
+  busy.value = true
+  try {
+    const text = await api.exportAccounts()
+    const blob = new Blob([text], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `trae-signin-accounts-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    store.showToast('已导出')
+  } catch (e: any) { store.showToast(e.message) }
+  finally { busy.value = false }
+}
+
+function pickImportFile() {
+  fileInput.value?.click()
+}
+
+async function onImportFile(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = '' // 允许重复选择同一文件
+  if (!file) return
+  if (!confirm(`导入 ${file.name}？相同账号将被覆盖，新账号会被添加。`)) return
+  busy.value = true
+  try {
+    const content = await file.text()
+    const r = await api.importAccounts(content)
+    store.showToast(`导入完成：新增 ${r.added}，更新 ${r.updated}`)
+    await store.loadAccounts(); await store.loadLogs()
+  } catch (e: any) { store.showToast(e.message) }
+  finally { busy.value = false }
+}
 </script>
 
 <template>
@@ -62,6 +103,11 @@ async function del(a: Account) {
       <button class="neu-btn" :disabled="busy || store.accounts.length === 0" @click="checkinAll">
         一键签到
       </button>
+      <button class="neu-btn" :disabled="busy || store.accounts.length === 0" @click="exportConfig">
+        导出配置
+      </button>
+      <button class="neu-btn" :disabled="busy" @click="pickImportFile">导入配置</button>
+      <input ref="fileInput" type="file" accept=".json,application/json" style="display:none" @change="onImportFile" />
       <span class="count">共 {{ store.accounts.length }} 个账号</span>
     </div>
 

@@ -34,6 +34,18 @@ export const api = {
   authChange: (oldPassword: string, newUsername: string, newPassword: string) =>
     req<{ ok: boolean }>('/auth/change', { method: 'POST', body: JSON.stringify({ oldPassword, newUsername, newPassword }) }),
   listAccounts: () => req<Account[]>('/accounts'),
+  // 导出账号配置（返回原始 JSON 文本，前端存为文件）
+  exportAccounts: async (): Promise<string> => {
+    const res = await fetch(BASE + '/accounts/export')
+    if (!res.ok) {
+      if (res.status === 401 && onUnauthorized) onUnauthorized()
+      throw new Error(`导出失败: HTTP ${res.status}`)
+    }
+    return res.text()
+  },
+  // 导入账号配置（JSON 文本，数组或 {accounts:[...]} 格式）
+  importAccounts: (content: string) =>
+    req<{ added: number; updated: number }>('/accounts/import', { method: 'POST', body: content }),
   updateAccount: (id: string, patch: Record<string, any>) =>
     req<Account>(`/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   deleteAccount: (id: string) =>

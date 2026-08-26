@@ -6,9 +6,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"trae-signin-web/internal/auth"
 	"trae-signin-web/internal/checkin"
@@ -40,6 +42,8 @@ func NewHandler(d Deps) http.Handler {
 
 	// 业务接口（登录后可用）
 	mux.HandleFunc("GET /api/accounts", d.requireAuth(d.listAccounts))
+	mux.HandleFunc("GET /api/accounts/export", d.requireAuth(d.exportAccounts))
+	mux.HandleFunc("POST /api/accounts/import", d.requireAuth(d.importAccounts))
 	mux.HandleFunc("PATCH /api/accounts/{id}", d.requireAuth(d.updateAccount))
 	mux.HandleFunc("DELETE /api/accounts/{id}", d.requireAuth(d.deleteAccount))
 	mux.HandleFunc("POST /api/accounts/{id}/checkin", d.requireAuth(d.checkinOne))
@@ -175,6 +179,51 @@ func (d *Deps) authChange(w http.ResponseWriter, r *http.Request) {
 
 func (d *Deps) listAccounts(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, d.Store.ListAccounts())
+}
+
+// exportAccounts 导出全部账号配置（含凭证，附件下载）。
+func (d *Deps) exportAccounts(w http.ResponseWriter, r *http.Request) {
+	payload := struct {
+		Version   int             `json:"version"`
+		ExportedAt int64          `json:"exportedAt"`
+		Accounts  []store.Account `json:"accounts"`
+	}{
+		Version:    1,
+		ExportedAt: time.Now().Unix(),
+		Accounts:   d.Store.ExportAccounts(),
+	}
+	w.Header().Set("Content-Disposition",
+		`attachment; filename="trae-signin-accounts-`+time.Now().Format("20060102")+`.json"`)
+	writeJSON(w, http.StatusOK, payload)
+}
+
+// importAccounts 导入账号配置：接受 {"accounts":[...]} 或纯数组 [...] 两种格式。
+func (d *Deps) importAccounts(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(io.LimitReader(r.Body, 4<<20))
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	var accs []store.Account
+	var wrapper struct {
+		Accounts []store.Account `json:"accounts"`
+	}
+	if json.Unmarshal(body, &wrapper) == nil && wrapper.Accounts != nil {
+		accs = wrapper.Accounts
+	} else if err := json.Unmarshal(body, &accs); err != nil {
+		jsonError(w, http.StatusBadRequest, "无法解析导入文件（期望 JSON 数组或 {\"accounts\":[...]}）: "+err.Error())
+		return
+	}
+	if len(accs) == 0 {
+		jsonError(w, http.StatusBadRequest, "文件中没有账号")
+		return
+	}
+	added, updated, err := d.Store.ImportAccounts(accs)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, "导入失败: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"added": added, "updated": updated})
 }
 
 func (d *Deps) updateAccount(w http.ResponseWriter, r *http.Request) {

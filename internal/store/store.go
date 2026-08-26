@@ -316,6 +316,57 @@ func (s *Store) DeleteAccount(id string) bool {
 	return false
 }
 
+// ExportAccounts 返回全部账号完整数据（含凭证，用于配置导出迁移）。
+func (s *Store) ExportAccounts() []Account {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]Account, len(s.d.Accounts))
+	copy(out, s.d.Accounts)
+	return out
+}
+
+// ImportAccounts 批量导入账号（按 UID 匹配：已存在则整体替换，否则新增）。
+// 返回（新增数， 更新数）。
+func (s *Store) ImportAccounts(accs []Account) (int, int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	added, updated := 0, 0
+	for _, acc := range accs {
+		if acc.UID == "" {
+			continue
+		}
+		replaced := false
+		for i, a := range s.d.Accounts {
+			if a.UID == acc.UID {
+				if acc.ID == "" {
+					acc.ID = a.ID
+				}
+				s.d.Accounts[i] = acc
+				replaced = true
+				updated++
+				break
+			}
+		}
+		if !replaced {
+			if acc.ID == "" {
+				acc.ID = newID()
+			}
+			if acc.CreatedAt == 0 {
+				acc.CreatedAt = nowMs()
+			}
+			if acc.Region == "" {
+				acc.Region = "CN"
+			}
+			if acc.ApiHost == "" {
+				acc.ApiHost = "https://api.trae.com.cn"
+			}
+			s.d.Accounts = append(s.d.Accounts, acc)
+			added++
+		}
+	}
+	return added, updated, s.save()
+}
+
 // AddLog 追加签到日志，超出上限截断。
 func (s *Store) AddLog(l CheckinLog) {
 	s.mu.Lock()
