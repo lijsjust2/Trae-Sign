@@ -1,0 +1,56 @@
+// 后端 API 封装
+import type { Account, CheckinLog, CheckinResult, LoginURLResp, Settings, AuthStatus } from './types'
+
+const BASE = '/api'
+
+// 会话过期时的全局回调（由 App 注册，跳回登录页）
+let onUnauthorized: (() => void) | null = null
+export function setUnauthorizedHandler(fn: () => void) { onUnauthorized = fn }
+
+async function req<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(BASE + path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options
+  })
+  if (!res.ok) {
+    if (res.status === 401 && onUnauthorized) onUnauthorized()
+    let msg = `HTTP ${res.status}`
+    try {
+      const j = await res.json()
+      if (j.error) msg = j.error
+    } catch { /* ignore */ }
+    throw new Error(msg)
+  }
+  return res.json() as Promise<T>
+}
+
+export const api = {
+  authStatus: () => req<AuthStatus>('/auth/status'),
+  authSetup: (username: string, password: string) =>
+    req<{ ok: boolean }>('/auth/setup', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  authLogin: (username: string, password: string) =>
+    req<{ ok: boolean }>('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  authLogout: () => req<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
+  authChange: (oldPassword: string, newUsername: string, newPassword: string) =>
+    req<{ ok: boolean }>('/auth/change', { method: 'POST', body: JSON.stringify({ oldPassword, newUsername, newPassword }) }),
+  listAccounts: () => req<Account[]>('/accounts'),
+  updateAccount: (id: string, patch: Record<string, any>) =>
+    req<Account>(`/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  deleteAccount: (id: string) =>
+    req<{ ok: boolean }>(`/accounts/${id}`, { method: 'DELETE' }),
+  checkinOne: (id: string) =>
+    req<CheckinResult>(`/accounts/${id}/checkin`, { method: 'POST' }),
+  checkinAll: () =>
+    req<CheckinResult[]>('/accounts/checkin-all', { method: 'POST' }),
+  getPoints: (id: string) =>
+    req<{ success: boolean; totalPoints: number }>(`/accounts/${id}/points`),
+  listLogs: (limit = 100) => req<CheckinLog[]>(`/logs?limit=${limit}`),
+  clearLogs: () => req<{ ok: boolean }>('/logs', { method: 'DELETE' }),
+  getSettings: () => req<Settings>('/settings'),
+  saveSettings: (s: Settings) =>
+    req<Settings>('/settings', { method: 'POST', body: JSON.stringify(s) }),
+  loginURL: (remark: string, checkinTime: string, pushplusToken: string) =>
+    req<LoginURLResp>('/login/url', { method: 'POST', body: JSON.stringify({ remark, checkinTime, pushplusToken }) }),
+  loginCallback: (callbackUrl: string, machineId: string, deviceId: string, privateKeyPem: string, publicKeyPem: string, remark: string, checkinTime: string, pushplusToken: string) =>
+    req<Account>('/login/callback', { method: 'POST', body: JSON.stringify({ callbackUrl, machineId, deviceId, privateKeyPem, publicKeyPem, remark, checkinTime, pushplusToken }) })
+}

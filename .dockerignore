@@ -1,0 +1,7 @@
+node_modules
+web/node_modules
+web/dist
+data
+*.exe
+*.log
+.git
