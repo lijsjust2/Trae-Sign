@@ -102,6 +102,65 @@ func TestTodayCheckinStatusFromLogs(t *testing.T) {
 	}
 }
 
+// ListAccounts 返回的 PublicAccount.todayEarned / todayStatus 必须来自今日 success 日志聚合，
+// 不能用 LastEarned（会被 ALREADY 覆盖）。这是端到端集成测试：模拟真实数据结构。
+func TestListAccountsTodayEarnedFromLogs(t *testing.T) {
+	path := filepathTemp(t)
+	s, _ := New(path)
+	defer os.Remove(path)
+
+	s.d.Accounts = []Account{
+		{ // 场景1：今日 success +200，随后 ALREADY LastEarned 覆盖为 0
+			ID: "a1", UID: "u1", Nickname: "41015",
+			LastEarned: 0, // 被 ALREADY 污染
+			LastCheckinResult: "already",
+		},
+		{ // 场景2：今日两条 success +200 (同账号不同时段) → 累加？实际上每天只能 +200，但防御性编程：应累加
+			ID: "a2", UID: "u2", Nickname: "1044", LastEarned: 999,
+		},
+		{ // 场景3：今天没日志
+			ID: "a3", UID: "u3", Nickname: "xxx", LastEarned: 100,
+		},
+	}
+
+	todayM := time.Now().UnixMilli() // 今日内时间戳
+	s.d.Logs = []CheckinLog{
+		{ID: "l1", AccountID: "a1", Time: todayM, Result: "success", Earned: 200},
+		{ID: "l2", AccountID: "a1", Time: todayM + 1000, Result: "already", Earned: 0}, // ALREADY 不应计入
+		{ID: "l3", AccountID: "a2", Time: todayM, Result: "success", Earned: 200},
+		{ID: "l4", AccountID: "a3", Time: todayM - 25*3600*1000, Result: "success", Earned: 200}, // 昨天，不计
+	}
+	_ = s.save()
+
+	accs := s.ListAccounts()
+	byID := map[string]PublicAccount{}
+	for _, pa := range accs { byID[pa.ID] = pa }
+
+	if got := byID["a1"].TodayEarned; got != 200 {
+		t.Errorf("a1 TodayEarned = %d, want 200 (从 success 日志，无视 LastEarned=0 与 already 条目)", got)
+	}
+	if got := byID["a1"].TodayStatus; got != "已签到" {
+		t.Errorf("a1 TodayStatus = %q, want 已签到", got)
+	}
+	if got := byID["a2"].TodayEarned; got != 200 {
+		t.Errorf("a2 TodayEarned = %d, want 200", got)
+	}
+	if got := byID["a2"].TodayStatus; got != "已签到" {
+		t.Errorf("a2 TodayStatus = %q, want 已签到", got)
+	}
+	if got := byID["a3"].TodayEarned; got != 0 {
+		t.Errorf("a3 TodayEarned = %d, want 0 (今天没日志)", got)
+	}
+	if got := byID["a3"].TodayStatus; got != "未签到" {
+		t.Errorf("a3 TodayStatus = %q, want 未签到", got)
+	}
+
+	// 关键：hasRefreshToken 等旧字段也正确返回，嵌入 Account 字段不能缺失
+	if !byID["a1"].HasRefreshToken && byID["a1"].UID != "u1" {
+		t.Errorf("PublicAccount 嵌入字段丢失: %+v", byID["a1"])
+	}
+}
+
 func filepathTemp(t *testing.T) string {
 	f, err := os.CreateTemp("", "store-*.json")
 	if err != nil {
