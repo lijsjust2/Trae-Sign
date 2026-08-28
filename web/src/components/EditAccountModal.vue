@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { api } from '../api'
 import { useStore } from '../store'
-import type { Account } from '../types'
+import type { Account, Settings } from '../types'
 
 const props = defineProps<{ account: Account }>()
 const emit = defineEmits<{ close: [], done: [] }>()
@@ -13,6 +13,40 @@ const checkinTime = ref(props.account.checkinTime)
 const pushplusToken = ref(props.account.pushplusToken)
 const enabled = ref(props.account.enabled)
 const busy = ref(false)
+const defaultTime = ref('08:00')
+
+// 加载默认签到时间，用于"使用默认"提示
+onMounted(async () => {
+  try {
+    const s: Settings = await api.getSettings()
+    if (s.defaultCheckinTime) defaultTime.value = s.defaultCheckinTime
+  } catch { /* ignore */ }
+})
+
+// 生成半小时档位的时间选项，按时段分组
+const timeOptions = computed(() => {
+  const groups: { label: string; items: { value: string; text: string }[] }[] = [
+    { label: '凌晨（00:00 - 05:30）', items: [] },
+    { label: '上午（06:00 - 11:30）', items: [] },
+    { label: '下午（12:00 - 17:30）', items: [] },
+    { label: '晚上（18:00 - 23:30）', items: [] },
+  ]
+  for (let h = 0; h < 24; h++) {
+    for (const m of [0, 30]) {
+      const value = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+      const text = value
+      const groupIdx = Math.floor(h / 6)
+      groups[groupIdx].items.push({ value, text })
+    }
+  }
+  return groups
+})
+
+const effectiveTime = computed(() => checkinTime.value || defaultTime.value)
+
+function clearCheckinTime() {
+  checkinTime.value = ''
+}
 
 async function save() {
   busy.value = true
@@ -42,10 +76,20 @@ async function save() {
           <span class="neu-label">备注名</span>
           <input class="neu-input" v-model="remark" />
         </label>
-        <label class="field">
-          <span class="neu-label">签到时间（HH:mm）</span>
-          <input class="neu-input" type="time" v-model="checkinTime" />
-        </label>
+        <div class="field">
+          <div class="time-row">
+            <span class="neu-label">签到时间</span>
+            <button v-if="checkinTime" type="button" class="clear-btn" @click="clearCheckinTime"
+              title="清除，使用默认时间">使用默认</button>
+          </div>
+          <select class="neu-input" v-model="checkinTime">
+            <option value="">使用默认（{{ defaultTime }}）</option>
+            <optgroup v-for="g in timeOptions" :key="g.label" :label="g.label">
+              <option v-for="it in g.items" :key="it.value" :value="it.value">{{ it.text }}</option>
+            </optgroup>
+          </select>
+          <div class="hint">当前生效：{{ effectiveTime }}</div>
+        </div>
         <label class="field">
           <span class="neu-label">PushPlus Token</span>
           <input class="neu-input" v-model="pushplusToken" placeholder="留空则用设置里的默认" />
@@ -73,4 +117,8 @@ async function save() {
 .switch { display: flex; align-items: center; gap: 10px; }
 .switch .neu-label { margin-bottom: 0; }
 .info { font-size: 12px; color: var(--muted); margin-bottom: 16px; }
+.time-row { display: flex; justify-content: space-between; align-items: center; }
+.clear-btn { background: none; border: none; color: var(--accent, #4a90d9); font-size: 12px; cursor: pointer; padding: 0; }
+.clear-btn:hover { text-decoration: underline; }
+.hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
 </style>
