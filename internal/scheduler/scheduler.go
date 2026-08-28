@@ -48,6 +48,8 @@ func (s *Scheduler) loop() {
 }
 
 // tick 检查当前 HH:mm 是否匹配某账号签到时间，且今日未签到则签到。
+// 推送分组：默认组（用默认签到时间 + 用默认 pushplus token）批量签到+合并推送；
+// 自定义组（自定义时间或自定义 token）单独签到+单独推送。
 func (s *Scheduler) tick() {
 	settings := s.Store.GetSettings()
 	if !settings.AutoCheckin {
@@ -57,12 +59,14 @@ func (s *Scheduler) tick() {
 	nowMs := now.UnixMilli()
 	hhmm := now.Format("15:04")
 
+	// 收集这一分钟到点且需要签到的账号
+	var defaultBatch []string // 默认组：合并推送
+	var customIDs []string    // 自定义组：单独推送
 	for _, a := range s.Store.ListAccounts() {
 		if !a.Enabled {
 			continue
 		}
 		// 今天已成功签到或今日配额已用尽(9074) → 跳过
-		// （rate_limited 当天不重试，重试只会多扣 claim 配额，次日自动恢复）
 		if isSameDayMs(a.LastCheckinAt) && (a.LastCheckinResult == "success" || a.LastCheckinResult == "rate_limited") {
 			continue
 		}
@@ -70,7 +74,6 @@ func (s *Scheduler) tick() {
 		if a.LastCheckinAt > 0 && nowMs-a.LastCheckinAt < 10*60*1000 {
 			continue
 		}
-		// 触发条件：到点，或上次失败需重试（rate_limited 不重试）
 		t := a.CheckinTime
 		if t == "" {
 			t = settings.DefaultCheckinTime
@@ -80,12 +83,32 @@ func (s *Scheduler) tick() {
 		if !atPoint && !needRetry {
 			continue
 		}
-		// 随机延迟 0~60s，错开整点风控
+
+		// 分组：默认时间（空或等于默认）+ 用默认 pushplus（无自定义 token）→ 默认组
+		isDefaultTime := a.CheckinTime == "" || a.CheckinTime == settings.DefaultCheckinTime
+		isDefaultPush := a.PushPlusToken == ""
+		if isDefaultTime && isDefaultPush && atPoint {
+			defaultBatch = append(defaultBatch, a.ID)
+		} else {
+			customIDs = append(customIDs, a.ID)
+		}
+	}
+
+	// 默认组：批量串行签到 + 合并一条推送
+	if len(defaultBatch) > 0 {
+		go func(ids []string) {
+			delay := time.Duration(time.Now().UnixNano()%61) * time.Second
+			time.Sleep(delay)
+			_ = s.Svc.CheckinBatch(ids, true)
+		}(defaultBatch)
+	}
+	// 自定义组：单独签到 + 单独推送
+	for _, id := range customIDs {
 		go func(id string) {
-			delay := time.Duration(now.UnixNano()%61) * time.Second
+			delay := time.Duration(time.Now().UnixNano()%61) * time.Second
 			time.Sleep(delay)
 			_, _ = s.Svc.CheckinAccount(id, true)
-		}(a.ID)
+		}(id)
 	}
 }
 

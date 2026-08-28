@@ -5,7 +5,6 @@ package checkin
 import (
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"trae-signin-web/internal/store"
@@ -103,7 +102,7 @@ func (s *Service) CheckinAccount(id string, pushSelf bool) (Result, error) {
 		Remain:      cr.Remain,
 	})
 
-	// 推送该账号结果
+	// 推送该账号结果（仅自定义组走这里；默认组由 CheckinBatch 合并推送）
 	if pushSelf {
 		token := acc.PushPlusToken
 		if token == "" {
@@ -132,52 +131,88 @@ func statusText(s string) string {
 	}
 }
 
-// CheckinAll 对所有启用账号签到，每个账号推送自身结果，并汇总推送到默认 pushplus。
-func (s *Service) CheckinAll() []Result {
-	accounts := s.Store.ListAccounts()
-	var enabled []store.PublicAccount
-	for _, a := range accounts {
-		if a.Enabled {
-			enabled = append(enabled, a)
-		}
-	}
-
-	var (
-		results []Result
-		mu      sync.Mutex
-	)
-	for i, a := range enabled {
+// CheckinBatch 对一批账号串行签到，可选合并推送（用于默认组：同签到时间 + 同默认 token）。
+// 合并推送时一条消息列出所有账号明细，标题用"TRAE 签到：<总积分>"。
+func (s *Service) CheckinBatch(ids []string, mergedPush bool) []Result {
+	var results []Result
+	for i, id := range ids {
 		if i > 0 {
 			time.Sleep(2 * time.Second) // 账号间间隔，降低风控
 		}
-		r, err := s.CheckinAccount(a.ID, true)
+		r, err := s.CheckinAccount(id, false) // 不单独推
 		if err != nil {
-			r = Result{AccountID: a.ID, Name: displayName(a.Account), Status: "FAIL", Detail: err.Error()}
+			acc, _ := s.Store.GetAccount(id)
+			r = Result{AccountID: id, Name: displayName(acc), Status: "FAIL", Detail: err.Error()}
 		}
-		mu.Lock()
 		results = append(results, r)
-		mu.Unlock()
 	}
 
-	// 汇总推送（默认 pushplus）
-	if def := s.Store.GetSettings().DefaultPushPlusToken; def != "" && len(results) > 0 {
-		ok, already, fail := 0, 0, 0
-		for _, r := range results {
-			switch r.Status {
-			case "OK":
-				ok++
-			case "ALREADY":
-				already++
-			default:
-				fail++
-			}
+	if mergedPush && len(results) > 0 {
+		if def := s.Store.GetSettings().DefaultPushPlusToken; def != "" {
+			title, content := buildMergedMessage(results)
+			go func() { _ = s.Up.PushPlus(def, title, content) }()
 		}
-		var b strings.Builder
-		fmt.Fprintf(&b, "TRAE 签到汇总\n总计 %d  成功 %d  已签 %d  失败 %d\n\n", len(results), ok, already, fail)
-		for _, r := range results {
-			fmt.Fprintf(&b, "%s：%s  + %d  累计 %d\n", r.Name, statusText(r.Status), r.Earned, r.Remain)
+	}
+	return results
+}
+
+// buildMergedMessage 构造默认组合并推送的标题和内容。
+// 标题用所有账号最新总积分之和；内容包含总积分、总获得积分和每账号明细。
+func buildMergedMessage(results []Result) (title, content string) {
+	var totalRemain, totalEarned int64
+	for _, r := range results {
+		totalRemain += r.Remain
+		totalEarned += r.Earned
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "最新总积分 %d，签到获得 %d 积分\n明细如下：\n", totalRemain, totalEarned)
+	for i, r := range results {
+		fmt.Fprintf(&b, "%d、%s +%d 当前总积分 %d\n", i+1, r.Name, r.Earned, r.Remain)
+	}
+	return fmt.Sprintf("TRAE 签到：%d", totalRemain), b.String()
+}
+
+// isDefaultGroup 判断账号是否属于默认组（用默认签到时间 + 用默认 pushplus token）。
+// 默认组合并一条推送；自定义组（自定义时间或自定义 token）单独推送。
+func isDefaultGroup(a store.PublicAccount, settings store.Settings) bool {
+	isDefaultTime := a.CheckinTime == "" || a.CheckinTime == settings.DefaultCheckinTime
+	isDefaultPush := a.PushPlusToken == ""
+	return isDefaultTime && isDefaultPush
+}
+
+// CheckinAll 对所有启用账号签到，按推送策略分组：
+//   - 默认组（默认时间 + 默认 token）：批量串行签到 + 合并一条推送
+//   - 自定义组（自定义时间或自定义 token）：单独签到 + 单独推送
+func (s *Service) CheckinAll() []Result {
+	settings := s.Store.GetSettings()
+	accounts := s.Store.ListAccounts()
+
+	var defaultBatch, customIDs []string
+	for _, a := range accounts {
+		if !a.Enabled {
+			continue
 		}
-		go func() { _ = s.Up.PushPlus(def, "TRAE 签到汇总", b.String()) }()
+		if isDefaultGroup(a, settings) {
+			defaultBatch = append(defaultBatch, a.ID)
+		} else {
+			customIDs = append(customIDs, a.ID)
+		}
+	}
+
+	var results []Result
+	if len(defaultBatch) > 0 {
+		results = append(results, s.CheckinBatch(defaultBatch, true)...)
+	}
+	for i, id := range customIDs {
+		if len(results) > 0 || i > 0 {
+			time.Sleep(2 * time.Second)
+		}
+		r, err := s.CheckinAccount(id, true)
+		if err != nil {
+			acc, _ := s.Store.GetAccount(id)
+			r = Result{AccountID: id, Name: displayName(acc), Status: "FAIL", Detail: err.Error()}
+		}
+		results = append(results, r)
 	}
 	return results
 }
