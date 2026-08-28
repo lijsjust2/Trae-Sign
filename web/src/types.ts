@@ -13,6 +13,8 @@ export interface Account {
   lastCheckinResult: string
   lastCheckinMessage: string
   lastEarned: number
+  todayEarned: number   // 从今日 success 日志聚合，不被 already 覆盖
+  todayStatus: string   // 今日签到状态（已签到/未签到/配额用尽/失败）
   createdAt: number
 }
 

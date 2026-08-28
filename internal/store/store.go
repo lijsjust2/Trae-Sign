@@ -71,6 +71,8 @@ func (a Account) ToAuth() *auth.Auth {
 type PublicAccount struct {
 	Account
 	HasRefreshToken bool `json:"hasRefreshToken"`
+	TodayEarned     int64  `json:"todayEarned"`     // 今日真实获得积分（从 success 日志聚合，防止被 ALREADY 覆盖）
+	TodayStatus     string `json:"todayStatus"`     // 今日签到状态：已签到/未签到/配额用尽/失败
 }
 
 // CheckinLog 签到日志。
@@ -143,13 +145,76 @@ func newID() string {
 
 func nowMs() int64 { return time.Now().UnixMilli() }
 
+// isSameDayMs 判断毫秒戳是否是今天（包内使用）。
+func isSameDayMs(ms int64) bool {
+	if ms <= 0 {
+		return false
+	}
+	t := time.UnixMilli(ms)
+	n := time.Now()
+	return t.Year() == n.Year() && t.Month() == n.Month() && t.Day() == n.Day()
+}
+
+// TodayEarned 计算账号今日真实获得积分（只统计 success 条目，不被 already 覆盖）。
+func (s *Store) TodayEarned(accountID string) int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.todayEarnedLocked(accountID)
+}
+func (s *Store) todayEarnedLocked(accountID string) int64 {
+	var total int64
+	for _, l := range s.d.Logs {
+		if l.AccountID == accountID && isSameDayMs(l.Time) && l.Result == "success" {
+			total += l.Earned
+		}
+	}
+	return total
+}
+
+// TodayCheckinStatus 今日签到状态（从最新今日日志推断，用于卡片显示）。
+func (s *Store) TodayCheckinStatus(accountID string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.todayStatusLocked(accountID)
+}
+func (s *Store) todayStatusLocked(accountID string) string {
+	var latest CheckinLog
+	var found bool
+	for _, l := range s.d.Logs {
+		if l.AccountID == accountID && isSameDayMs(l.Time) {
+			if !found || l.Time > latest.Time {
+				latest = l
+				found = true
+			}
+		}
+	}
+	if !found {
+		return "未签到"
+	}
+	switch latest.Result {
+	case "success", "already":
+		return "已签到"
+	case "rate_limited":
+		return "配额用尽"
+	case "failed":
+		return "失败"
+	default:
+		return "未签到"
+	}
+}
+
 // ListAccounts 返回全部账号（脱敏）。
 func (s *Store) ListAccounts() []PublicAccount {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := make([]PublicAccount, 0, len(s.d.Accounts))
 	for _, a := range s.d.Accounts {
-		pa := PublicAccount{Account: a, HasRefreshToken: a.RefreshToken != ""}
+		pa := PublicAccount{
+			Account:         a,
+			HasRefreshToken: a.RefreshToken != "",
+			TodayEarned:     s.todayEarnedLocked(a.ID),
+			TodayStatus:     s.todayStatusLocked(a.ID),
+		}
 		pa.AccessToken = ""
 		pa.RefreshToken = ""
 		out = append(out, pa)
@@ -218,13 +283,19 @@ func (s *Store) UpsertAccount(acc Account) (PublicAccount, error) {
 	s.mu.Lock()
 	saved := s.upsertByUID(acc)
 	err := s.save()
-	s.mu.Unlock()
 	if err != nil {
+		s.mu.Unlock()
 		return PublicAccount{}, err
 	}
-	pa := PublicAccount{Account: saved, HasRefreshToken: saved.RefreshToken != ""}
+	pa := PublicAccount{
+		Account:         saved,
+		HasRefreshToken: saved.RefreshToken != "",
+		TodayEarned:     s.todayEarnedLocked(saved.ID),
+		TodayStatus:     s.todayStatusLocked(saved.ID),
+	}
 	pa.AccessToken = ""
 	pa.RefreshToken = ""
+	s.mu.Unlock()
 	return pa, nil
 }
 
@@ -264,7 +335,12 @@ func (s *Store) UpdateAccount(id string, patch map[string]any) (PublicAccount, b
 		if a.ID == id {
 			applyPatch(&s.d.Accounts[i], patch)
 			_ = s.save()
-			pa := PublicAccount{Account: s.d.Accounts[i], HasRefreshToken: s.d.Accounts[i].RefreshToken != ""}
+			pa := PublicAccount{
+				Account:         s.d.Accounts[i],
+				HasRefreshToken: s.d.Accounts[i].RefreshToken != "",
+				TodayEarned:     s.todayEarnedLocked(id),
+				TodayStatus:     s.todayStatusLocked(id),
+			}
 			pa.AccessToken = ""
 			pa.RefreshToken = ""
 			return pa, true

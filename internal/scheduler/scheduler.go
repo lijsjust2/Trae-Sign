@@ -67,7 +67,7 @@ func (s *Scheduler) tick() {
 			continue
 		}
 		// 今天已成功签到或今日配额已用尽(9074) → 跳过
-		if isSameDayMs(a.LastCheckinAt) && (a.LastCheckinResult == "success" || a.LastCheckinResult == "rate_limited") {
+		if isSameDayMs(a.LastCheckinAt) && (a.LastCheckinResult == "success" || a.LastCheckinResult == "already" || a.LastCheckinResult == "rate_limited") {
 			continue
 		}
 		// 失败重试冷却：距上次尝试不足 10 分钟 → 跳过

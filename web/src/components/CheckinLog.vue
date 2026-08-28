@@ -22,13 +22,21 @@ async function clearAll() {
       <div v-for="l in store.logs" :key="l.id" class="log-item neu">
         <div class="log-head">
           <span class="name">{{ l.accountName }}</span>
-          <span class="tag" :class="l.result === 'success' ? 'tag-ok' : 'tag-fail'">
-            {{ l.result === 'success' ? '成功' : '失败' }}
+          <span class="tag" :class="
+            l.result === 'success' && l.earned > 0 ? 'tag-ok'
+            : l.result === 'already' ? 'tag-ok'
+            : 'tag-fail'
+          ">
+            <template v-if="l.result === 'success' && l.earned === 0">已签到</template>
+            <template v-else-if="l.result === 'success'">成功</template>
+            <template v-else-if="l.result === 'already'">已签到</template>
+            <template v-else-if="l.result === 'rate_limited'">配额用尽</template>
+            <template v-else>失败</template>
           </span>
           <span class="time">{{ fmtTime(l.time) }}</span>
         </div>
         <div class="log-body">
-          <span v-if="l.result === 'success'">+{{ l.earned }} 积分 · 累计 {{ l.remain }}</span>
+          <span v-if="l.result === 'success' || l.result === 'already'">+{{ l.earned }} 积分 · 累计 {{ l.remain }}</span>
           <span v-else class="err">{{ l.message }}</span>
         </div>
       </div>

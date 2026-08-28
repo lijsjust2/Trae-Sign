@@ -50,8 +50,10 @@ func nowMs() int64 { return time.Now().UnixMilli() }
 
 func statusToResult(s string) string {
 	switch s {
-	case "OK", "ALREADY":
-		return "success"
+	case "OK":
+		return "success" // 真正签到并获得积分
+	case "ALREADY":
+		return "already" // 今日已签到（无积分），显示和聚合应区别于 success
 	case "RATE_LIMIT":
 		return "rate_limited" // 9074 今日配额用尽：当天不重试，次日自动恢复
 	default:
