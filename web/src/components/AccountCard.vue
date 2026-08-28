@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Account } from '../types'
-import { fmtTime, accountName } from '../utils'
+import { fmtTime, accountName, todayCheckinStatus, todayEarned } from '../utils'
 
 defineProps<{ account: Account }>()
 const emit = defineEmits<{ checkin: [], edit: [], del: [], points: [] }>()
@@ -23,13 +23,13 @@ const emit = defineEmits<{ checkin: [], edit: [], del: [], points: [] }>()
         <div class="lbl">累计积分</div>
       </div>
       <div class="stat neu-inset">
-        <div class="num">+{{ account.lastEarned }}</div>
-        <div class="lbl">上次获得</div>
+        <div class="num">+{{ todayEarned(account) }}</div>
+        <div class="lbl">今日签到</div>
       </div>
     </div>
     <div class="last">
-      <span class="tag" :class="account.lastCheckinResult === 'success' ? 'tag-ok' : account.lastCheckinResult === 'failed' ? 'tag-fail' : 'tag-muted'">
-        {{ account.lastCheckinResult === 'success' ? '成功' : account.lastCheckinResult === 'failed' ? '失败' : '未签到' }}
+      <span class="tag" :class="todayCheckinStatus(account) === '已签到' ? 'tag-ok' : todayCheckinStatus(account) === '失败' || todayCheckinStatus(account) === '配额用尽' ? 'tag-fail' : 'tag-muted'">
+        {{ todayCheckinStatus(account) }}
       </span>
       <span class="time">{{ fmtTime(account.lastCheckinAt) }}</span>
       <span class="msg" v-if="account.lastCheckinMessage">{{ account.lastCheckinMessage }}</span>

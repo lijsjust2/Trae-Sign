@@ -1,13 +1,26 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useStore } from '../store'
 import { api } from '../api'
 
 const store = useStore()
-const defaultCheckinTime = ref(store.settings.defaultCheckinTime)
 const defaultPushplusToken = ref(store.settings.defaultPushplusToken)
 const autoCheckin = ref(store.settings.autoCheckin)
 const busy = ref(false)
+
+// 默认签到时间拆成小时+分钟两个下拉，与编辑账号弹窗交互一致
+const initial = store.settings.defaultCheckinTime || '08:00'
+const defHour = ref(initial.slice(0, 2))
+const defMin = ref(initial.slice(3, 5))
+const defaultCheckinTime = ref('')
+function syncDefault() {
+  defaultCheckinTime.value = defHour.value + ':' + (defMin.value || '00')
+}
+watch([defHour, defMin], syncDefault)
+syncDefault()
+
+const hours = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0'))
+const minutes = ['00', '15', '30', '45']
 
 async function save() {
   busy.value = true
@@ -48,11 +61,19 @@ async function changeAuth() {
     <div class="settings neu">
       <div class="title">全局设置</div>
       <div class="fields">
-        <label class="field">
-          <span class="neu-label">默认签到时间（HH:mm）</span>
-          <input class="neu-input" type="time" v-model="defaultCheckinTime" />
-          <span class="desc">账号未单独设置时使用此时间</span>
-        </label>
+        <div class="field">
+          <span class="neu-label">默认签到时间</span>
+          <div class="time-pickers">
+            <select class="neu-input" v-model="defHour">
+              <option v-for="h in hours" :key="h" :value="h">{{ h }}</option>
+            </select>
+            <span class="sep">:</span>
+            <select class="neu-input" v-model="defMin">
+              <option v-for="m in minutes" :key="m" :value="m">{{ m }}</option>
+            </select>
+          </div>
+          <span class="desc">账号未单独设置时使用此时间，当前生效 {{ defaultCheckinTime }}</span>
+        </div>
         <label class="field">
           <span class="neu-label">默认 PushPlus Token</span>
           <input class="neu-input" v-model="defaultPushplusToken" placeholder="一键签到汇总推送用此 token" />
@@ -95,4 +116,7 @@ async function changeAuth() {
 .switch { display: flex; align-items: center; gap: 10px; }
 .switch .neu-label { margin-bottom: 0; }
 .desc { display: block; font-size: 11px; color: var(--faint); margin-top: 4px; }
+.time-pickers { display: flex; align-items: center; gap: 8px; }
+.time-pickers .neu-input { flex: 1; min-width: 0; }
+.time-pickers .sep { font-weight: 600; color: var(--muted); }
 </style>
