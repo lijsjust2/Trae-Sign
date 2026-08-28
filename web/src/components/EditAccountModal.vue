@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { api } from '../api'
 import { useStore } from '../store'
 import type { Account, Settings } from '../types'
@@ -9,13 +9,24 @@ const emit = defineEmits<{ close: [], done: [] }>()
 const store = useStore()
 
 const remark = ref(props.account.remark)
-const checkinTime = ref(props.account.checkinTime)
 const pushplusToken = ref(props.account.pushplusToken)
 const enabled = ref(props.account.enabled)
 const busy = ref(false)
 const defaultTime = ref('08:00')
 
-// 加载默认签到时间，用于"使用默认"提示
+// 从原始 checkinTime 解析出小时和分钟（空则两者都为空 → 使用默认）
+const initial = props.account.checkinTime || ''
+const hourRef = ref(initial.slice(0, 2))   // '00'-'23' 或 ''
+const minRef = ref(initial.slice(3, 5))    // '00'/'15'/'30'/'45' 或 ''
+
+// 同步给后端的 checkinTime：选了小时才有效，分钟未选视为 00
+const checkinTime = ref('')
+function syncCheckinTime() {
+  checkinTime.value = hourRef.value === '' ? '' : hourRef.value + ':' + (minRef.value || '00')
+}
+watch([hourRef, minRef], syncCheckinTime)
+syncCheckinTime()
+
 onMounted(async () => {
   try {
     const s: Settings = await api.getSettings()
@@ -23,29 +34,15 @@ onMounted(async () => {
   } catch { /* ignore */ }
 })
 
-// 生成半小时档位的时间选项，按时段分组
-const timeOptions = computed(() => {
-  const groups: { label: string; items: { value: string; text: string }[] }[] = [
-    { label: '凌晨（00:00 - 05:30）', items: [] },
-    { label: '上午（06:00 - 11:30）', items: [] },
-    { label: '下午（12:00 - 17:30）', items: [] },
-    { label: '晚上（18:00 - 23:30）', items: [] },
-  ]
-  for (let h = 0; h < 24; h++) {
-    for (const m of [0, 30]) {
-      const value = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-      const text = value
-      const groupIdx = Math.floor(h / 6)
-      groups[groupIdx].items.push({ value, text })
-    }
-  }
-  return groups
-})
+// 小时 00-23；分钟 00/15/30/45 四档，足够精细又好选
+const hours = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0'))
+const minutes = ['00', '15', '30', '45']
 
 const effectiveTime = computed(() => checkinTime.value || defaultTime.value)
 
-function clearCheckinTime() {
-  checkinTime.value = ''
+function useDefault() {
+  hourRef.value = ''
+  minRef.value = ''
 }
 
 async function save() {
@@ -79,16 +76,21 @@ async function save() {
         <div class="field">
           <div class="time-row">
             <span class="neu-label">签到时间</span>
-            <button v-if="checkinTime" type="button" class="clear-btn" @click="clearCheckinTime"
+            <button v-if="hourRef" type="button" class="clear-btn" @click="useDefault"
               title="清除，使用默认时间">使用默认</button>
           </div>
-          <select class="neu-input" v-model="checkinTime">
-            <option value="">使用默认（{{ defaultTime }}）</option>
-            <optgroup v-for="g in timeOptions" :key="g.label" :label="g.label">
-              <option v-for="it in g.items" :key="it.value" :value="it.value">{{ it.text }}</option>
-            </optgroup>
-          </select>
-          <div class="hint">当前生效：{{ effectiveTime }}</div>
+          <div class="time-pickers">
+            <select class="neu-input" v-model="hourRef">
+              <option value="">时</option>
+              <option v-for="h in hours" :key="h" :value="h">{{ h }}</option>
+            </select>
+            <span class="sep">:</span>
+            <select class="neu-input" v-model="minRef" :disabled="hourRef === ''">
+              <option value="">分</option>
+              <option v-for="m in minutes" :key="m" :value="m">{{ m }}</option>
+            </select>
+          </div>
+          <div class="hint">当前生效：{{ effectiveTime }}<span v-if="hourRef === ''">（默认）</span></div>
         </div>
         <label class="field">
           <span class="neu-label">PushPlus Token</span>
@@ -121,4 +123,8 @@ async function save() {
 .clear-btn { background: none; border: none; color: var(--accent, #4a90d9); font-size: 12px; cursor: pointer; padding: 0; }
 .clear-btn:hover { text-decoration: underline; }
 .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.time-pickers { display: flex; align-items: center; gap: 8px; }
+.time-pickers .neu-input { flex: 1; min-width: 0; }
+.time-pickers .sep { font-weight: 600; color: var(--muted); }
+.time-pickers .neu-input:disabled { opacity: .5; cursor: not-allowed; }
 </style>
