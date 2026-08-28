@@ -15,7 +15,7 @@ const emit = defineEmits<{ checkin: [], edit: [], del: [], points: [] }>()
     <div class="meta">
       <span>昵称：{{ account.nickname || '—' }}</span>
       <span>签到时间：{{ account.checkinTime || '默认' }}</span>
-      <span>推送：{{ account.pushplusToken ? '已设置' : '未设置' }}</span>
+      <span>推送：{{ account.pushplusToken ? '已设置' : '默认值' }}</span>
     </div>
     <div class="stats">
       <div class="stat neu-inset">
