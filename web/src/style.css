@@ -1,93 +1,189 @@
-/* TRAE 签到 · Neumorphism + Teal 极简风格 */
+/* TRAE 签到 · Argon-inspired 极简后台风格 */
 :root {
-  --bg: #eef2f5;
-  --surface: #eef2f5;
-  --text: #2d3748;
-  --muted: #718096;
-  --faint: #a0aec0;
-  --brand: #0d9488;
-  --brand-dark: #0f766e;
-  --brand-soft: #ccfbf1;
-  --danger: #e53e3e;
-  --ok: #16a34a;
-  --warn: #d97706;
-  --shadow-dark: rgba(163, 177, 198, 0.45);
-  --shadow-light: rgba(255, 255, 255, 0.9);
-  --radius: 14px;
-  --radius-sm: 10px;
-  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  /* 主色：Argon 蓝紫渐变基调 */
+  --primary: #5e72e4;        /* 主按钮、tab、强调（Argon 蓝紫） */
+  --primary-hover: #4e62d0;
+  --primary-soft: #eef0ff;   /* 主色极浅底（tab active/软高亮） */
+  --primary-tint: #324cdd;   /* 深色主色（hover/渐变） */
+
+  /* 背景与表面 */
+  --bg: #f5f7fa;             /* 页面背景（比 Neumorphism 更白，不显脏） */
+  --surface: #ffffff;        /* 卡片纯白（统一白色，不再用背景色） */
+  --border: #e4e9f2;         /* 细分割边框 */
+  --border-strong: #cbd5e0;
+
+  /* 文字层次（对比鲜明） */
+  --text: #1a2140;           /* 正文（深蓝灰） */
+  --text-soft: #525f7f;      /* 次级文字 */
+  --muted: #8898aa;          /* 弱提示 */
+  --faint: #adb5bd;
+
+  /* 语义色 */
+  --success: #2dce89;        /* 成功（Argon 亮绿） */
+  --success-bg: #e6fbf2;
+  --success-fg: #0ea268;
+  --warning: #fb6340;        /* 橙红警告（配额用尽/频控） */
+  --warning-bg: #ffede7;
+  --warning-fg: #d44d2d;
+  --danger: #f5365c;         /* 危险（删除/错误） */
+  --danger-bg: #feecef;
+  --danger-fg: #c31f42;
+  --info: #11cdef;           /* 信息蓝 */
+  --info-bg: #e6fbfd;
+  --info-fg: #0798b3;
+
+  /* 通用 */
+  --radius: 12px;            /* 卡片圆角 */
+  --radius-sm: 8px;          /* 按钮/输入圆角 */
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 3px rgba(17,20,50,.04), 0 1px 2px rgba(17,20,50,.02);
+  --shadow-card-hover: 0 4px 16px rgba(17,20,50,.07), 0 2px 6px rgba(17,20,50,.04);
+  --shadow-btn: 0 2px 4px rgba(94,114,228,.15);
+  --shadow-focus: 0 0 0 3px rgba(94,114,228,.18);
+
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+          'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+html, body { height: 100%; }
+
 body {
   font-family: var(--font);
-  background: var(--bg);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(94,114,228,.07), transparent 60%),
+    radial-gradient(1000px 500px at 110% 10%, rgba(17,205,239,.05), transparent 60%),
+    var(--bg);
   color: var(--text);
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 button { font-family: inherit; cursor: pointer; border: none; outline: none; }
+input, select, textarea { font-family: inherit; outline: none; }
 
-/* 凸起卡片 */
+/* ====== 卡片（替换原 Neumorphism 凸起） ====== */
 .neu {
   background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow .2s ease, transform .2s ease, border-color .2s ease;
 }
-/* 凹陷区 */
+.neu:hover { box-shadow: var(--shadow-card-hover); }
+
+/* ====== 凹陷区 → 改为“浅底信息面板”（去掉凹凸阴影，更干净） ====== */
 .neu-inset {
-  background: var(--surface);
+  background: linear-gradient(135deg, #fbfcff 0%, #f3f5ff 100%);
+  border: 1px solid #ececfb;
   border-radius: var(--radius-sm);
-  box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
 }
-/* 凸起按钮 */
+
+/* ====== 按钮 ====== */
 .neu-btn {
+  display: inline-flex; align-items: center; justify-content: center;
   background: var(--surface);
-  color: var(--text);
+  color: var(--text-soft);
   padding: 8px 16px;
   border-radius: var(--radius-sm);
-  font-size: 13px;
-  box-shadow: 4px 4px 8px var(--shadow-dark), -4px -4px 8px var(--shadow-light);
-  transition: box-shadow .15s, color .15s;
+  font-size: 13px; font-weight: 500;
+  border: 1px solid var(--border);
+  transition: all .15s ease;
+  user-select: none;
 }
-.neu-btn:hover { color: var(--brand); }
-.neu-btn:active { box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light); }
-.neu-btn:disabled { color: var(--faint); cursor: not-allowed; }
+.neu-btn:hover {
+  color: var(--primary);
+  border-color: #d2dbf8;
+  background: var(--primary-soft);
+}
+.neu-btn:active { transform: translateY(1px); }
+.neu-btn:disabled { color: var(--muted); background: #f5f7fa; cursor: not-allowed; border-color: var(--border); }
 
-.neu-btn-primary { color: var(--brand); font-weight: 600; }
-.neu-btn-danger:hover { color: var(--danger); }
+/* 主按钮：实心蓝紫 + 白字，Argon 醒目风格 */
+.neu-btn-primary {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-tint) 100%);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: var(--shadow-btn);
+}
+.neu-btn-primary:hover {
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary-hover) 0%, #2a41bf 100%);
+  border-color: transparent;
+}
+.neu-btn-danger:hover {
+  color: var(--danger);
+  border-color: #f9cfd7;
+  background: var(--danger-bg);
+}
 
-.neu-btn-sm { padding: 5px 10px; font-size: 12px; }
+.neu-btn-sm { padding: 6px 11px; font-size: 12.5px; }
 
-/* 输入框 */
+/* ====== 输入框 / 下拉 ====== */
 .neu-input, .neu-textarea, select.neu-input {
   width: 100%;
   background: var(--surface);
   color: var(--text);
   padding: 9px 12px;
-  border: none;
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: 13.5px;
   font-family: inherit;
-  box-shadow: inset 2px 2px 5px var(--shadow-dark), inset -2px -2px 5px var(--shadow-light);
+  transition: all .15s ease;
 }
-.neu-input:focus, .neu-textarea:focus { outline: none; }
+.neu-input::placeholder { color: var(--faint); }
+.neu-input:hover { border-color: var(--border-strong); }
+.neu-input:focus, .neu-textarea:focus {
+  border-color: var(--primary);
+  box-shadow: var(--shadow-focus);
+  background: #fff;
+}
+select.neu-input { padding-right: 28px; appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238898aa' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
 .neu-textarea { resize: vertical; min-height: 80px; }
-.neu-label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
 
-.tag {
-  display: inline-block;
-  padding: 2px 9px;
-  border-radius: 999px;
-  font-size: 11px;
+.neu-label {
+  display: block;
+  font-size: 12px;
   font-weight: 600;
+  color: var(--text-soft);
+  margin-bottom: 6px;
+  letter-spacing: .1px;
 }
-.tag-ok { background: #dcfce7; color: #166534; }
-.tag-fail { background: #fee2e2; color: #991b1b; }
-.tag-muted { background: #e2e8f0; color: #475569; }
 
-a { color: var(--brand); text-decoration: none; }
+/* ====== 标签 tag ====== */
+.tag {
+  display: inline-flex; align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: .1px;
+}
+.tag-ok { background: var(--success-bg); color: var(--success-fg); }
+.tag-fail { background: var(--danger-bg); color: var(--danger-fg); }
+.tag-muted { background: #eef1f6; color: #5f6f88; }
+.tag-warn { background: var(--warning-bg); color: var(--warning-fg); }
+.tag-info { background: var(--info-bg); color: var(--info-fg); }
+.tag-primary { background: var(--primary-soft); color: #3a4dc4; }
+
+/* ====== 链接 ====== */
+a { color: var(--primary); text-decoration: none; }
 a:hover { text-decoration: underline; }
+
+/* ====== 滚动条（细节） ====== */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #d6deea; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #b8c2d6; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ====== 通用工具（非 Neumorphism 遗留，便于组件使用） ====== */
+.hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.sep { font-weight: 600; color: var(--muted); }

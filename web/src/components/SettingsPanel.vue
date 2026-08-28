@@ -59,7 +59,10 @@ async function changeAuth() {
 <template>
   <div class="wrap">
     <div class="settings neu">
-      <div class="title">全局设置</div>
+      <div class="head">
+        <div class="title">全局设置</div>
+        <span class="tag tag-primary">通用</span>
+      </div>
       <div class="fields">
         <div class="field">
           <span class="neu-label">默认签到时间</span>
@@ -72,7 +75,7 @@ async function changeAuth() {
               <option v-for="m in minutes" :key="m" :value="m">{{ m }}</option>
             </select>
           </div>
-          <span class="desc">账号未单独设置时使用此时间，当前生效 {{ defaultCheckinTime }}</span>
+          <span class="desc">账号未单独设置时使用此时间 · 当前生效 {{ defaultCheckinTime }}</span>
         </div>
         <label class="field">
           <span class="neu-label">默认 PushPlus Token</span>
@@ -87,7 +90,10 @@ async function changeAuth() {
     </div>
 
     <div class="settings neu">
-      <div class="title">登录账号</div>
+      <div class="head">
+        <div class="title">登录账号</div>
+        <span class="tag tag-warn">安全</span>
+      </div>
       <div class="fields">
         <label class="field">
           <span class="neu-label">新账号名</span>
@@ -108,15 +114,16 @@ async function changeAuth() {
 </template>
 
 <style scoped>
-.wrap { display: flex; flex-direction: column; gap: 20px; max-width: 480px; }
-.settings { padding: 22px; }
-.title { font-size: 16px; font-weight: 600; margin-bottom: 18px; }
-.fields { display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px; }
+.wrap { display: flex; flex-direction: column; gap: 22px; max-width: 560px; }
+.settings { padding: 22px 24px; }
+.head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
+.title { font-size: 17px; font-weight: 700; color: var(--text); letter-spacing: .1px; }
+.fields { display: flex; flex-direction: column; gap: 18px; margin-bottom: 22px; }
 .field { display: block; }
 .switch { display: flex; align-items: center; gap: 10px; }
 .switch .neu-label { margin-bottom: 0; }
-.desc { display: block; font-size: 11px; color: var(--faint); margin-top: 4px; }
-.time-pickers { display: flex; align-items: center; gap: 8px; }
+.desc { display: block; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.time-pickers { display: flex; align-items: center; gap: 8px; max-width: 260px; }
 .time-pickers .neu-input { flex: 1; min-width: 0; }
-.time-pickers .sep { font-weight: 600; color: var(--muted); }
+.time-pickers .sep { font-weight: 700; color: var(--muted); font-size: 16px; margin: 0 4px; }
 </style>

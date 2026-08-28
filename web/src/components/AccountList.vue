@@ -98,21 +98,33 @@ async function onImportFile(e: Event) {
 
 <template>
   <div class="list">
-    <div class="toolbar">
-      <button class="neu-btn neu-btn-primary" @click="showAdd = true">+ 添加账号</button>
-      <button class="neu-btn" :disabled="busy || store.accounts.length === 0" @click="checkinAll">
-        一键签到
-      </button>
-      <button class="neu-btn" :disabled="busy || store.accounts.length === 0" @click="exportConfig">
-        导出配置
-      </button>
-      <button class="neu-btn" :disabled="busy" @click="pickImportFile">导入配置</button>
-      <input ref="fileInput" type="file" accept=".json,application/json" style="display:none" @change="onImportFile" />
-      <span class="count">共 {{ store.accounts.length }} 个账号</span>
+    <div class="toolbar neu">
+      <div class="tool-left">
+        <button class="neu-btn neu-btn-primary" @click="showAdd = true">
+          <span class="plus">+</span> 添加账号
+        </button>
+        <button class="neu-btn" :disabled="busy || store.accounts.length === 0" @click="checkinAll">
+          一键签到
+        </button>
+        <div class="divider"></div>
+        <button class="neu-btn" :disabled="busy || store.accounts.length === 0" @click="exportConfig">
+          导出配置
+        </button>
+        <button class="neu-btn" :disabled="busy" @click="pickImportFile">导入配置</button>
+        <input ref="fileInput" type="file" accept=".json,application/json" style="display:none" @change="onImportFile" />
+      </div>
+      <div class="tool-right">
+        <div class="stat">
+          <div class="stat-num">{{ store.accounts.length }}</div>
+          <div class="stat-lbl">账号</div>
+        </div>
+      </div>
     </div>
 
-    <div v-if="store.accounts.length === 0" class="empty neu-inset">
-      还没有账号，点「添加账号」开始
+    <div v-if="store.accounts.length === 0" class="empty neu">
+      <div class="empty-icon">T</div>
+      <div class="empty-title">还没有账号</div>
+      <div class="empty-sub">点击右上角 <b>添加账号</b>，通过 OAuth 网页登录添加你的第一个 TRAE 账号</div>
     </div>
     <div v-else class="grid">
       <AccountCard
@@ -130,8 +142,38 @@ async function onImportFile(e: Event) {
 </template>
 
 <style scoped>
-.toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-.count { font-size: 12px; color: var(--muted); }
-.empty { padding: 48px; text-align: center; color: var(--muted); font-size: 14px; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; margin-bottom: 22px; gap: 12px;
+}
+.tool-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.plus { font-weight: 700; margin-right: 2px; font-size: 14px; }
+.divider { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+.tool-right { display: flex; align-items: center; }
+.stat {
+  padding: 6px 14px;
+  background: var(--primary-soft);
+  border: 1px solid #dbe0fc;
+  border-radius: 10px;
+  display: flex; align-items: baseline; gap: 6px;
+}
+.stat-num { font-size: 18px; font-weight: 700; color: var(--primary); line-height: 1; }
+.stat-lbl { font-size: 11.5px; color: var(--text-soft); }
+
+.empty {
+  padding: 56px 32px; text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.empty-icon {
+  width: 56px; height: 56px; border-radius: 16px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-tint));
+  color: #fff; display: flex; align-items: center; justify-content: center;
+  font-size: 24px; font-weight: 800; letter-spacing: 1px;
+  box-shadow: 0 8px 22px rgba(94,114,228,.3);
+  margin-bottom: 4px;
+}
+.empty-title { font-size: 17px; font-weight: 700; color: var(--text); }
+.empty-sub { font-size: 13px; color: var(--muted); max-width: 460px; line-height: 1.6; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px; }
 </style>

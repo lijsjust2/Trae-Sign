@@ -19,16 +19,16 @@ const emit = defineEmits<{ checkin: [], edit: [], del: [], points: [] }>()
     </div>
     <div class="stats">
       <div class="stat neu-inset">
+        <div class="subl">累计积分</div>
         <div class="num">{{ account.totalCredits }}</div>
-        <div class="lbl">累计积分</div>
       </div>
       <div class="stat neu-inset">
+        <div class="subl">今日签到</div>
         <div class="num">+{{ account.todayEarned }}</div>
-        <div class="lbl">今日签到</div>
       </div>
     </div>
     <div class="last">
-      <span class="tag" :class="account.todayStatus === '已签到' ? 'tag-ok' : account.todayStatus === '失败' || account.todayStatus === '配额用尽' ? 'tag-fail' : 'tag-muted'">
+      <span class="tag" :class="account.todayStatus === '已签到' ? 'tag-ok' : account.todayStatus === '失败' ? 'tag-fail' : account.todayStatus === '配额用尽' ? 'tag-warn' : 'tag-muted'">
         {{ account.todayStatus }}
       </span>
       <span class="time">{{ fmtTime(account.lastCheckinAt) }}</span>
@@ -44,15 +44,31 @@ const emit = defineEmits<{ checkin: [], edit: [], del: [], points: [] }>()
 </template>
 
 <style scoped>
-.card { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+.card { padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; }
 .head { display: flex; align-items: center; justify-content: space-between; }
-.name { font-size: 16px; font-weight: 600; }
-.meta { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12px; color: var(--muted); }
+.name { font-size: 17px; font-weight: 700; color: var(--text); letter-spacing: .1px; }
+
+.meta {
+  display: flex; flex-wrap: wrap; gap: 4px 20px;
+  font-size: 12.5px; color: var(--text-soft);
+  padding: 10px 14px;
+  background: linear-gradient(180deg, #fafbff 0%, #f6f8ff 100%);
+  border: 1px solid #ececfb;
+  border-radius: 10px;
+}
+
 .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.stat { padding: 10px 12px; text-align: center; }
-.num { font-size: 20px; font-weight: 700; color: var(--brand); }
-.lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
-.last { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
-.msg { color: var(--faint); }
-.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.stat {
+  padding: 14px 14px 12px;
+  border-radius: 10px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  overflow: hidden; position: relative;
+}
+.subl { font-size: 11.5px; letter-spacing: .2px; color: var(--muted); font-weight: 500; }
+.num { font-size: 22px; font-weight: 700; color: var(--primary); letter-spacing: .2px; }
+
+.last { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); flex-wrap: wrap; }
+.msg { color: var(--muted); }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 2px; }
+.actions :deep(.neu-btn-sm) { height: 30px; line-height: 1; }
 </style>
