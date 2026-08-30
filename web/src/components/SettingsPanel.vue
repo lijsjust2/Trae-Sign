@@ -36,6 +36,18 @@ async function save() {
   finally { busy.value = false }
 }
 
+// 测试推送：发送一条预览消息到默认 token（用输入框当前值，未保存也能测）
+const testBusy = ref(false)
+async function testPush() {
+  if (!defaultPushplusToken.value.trim()) { store.showToast('请先填写默认 PushPlus Token'); return }
+  testBusy.value = true
+  try {
+    await api.testPush(defaultPushplusToken.value.trim())
+    store.showToast('测试推送已发送，请查看微信')
+  } catch (e: any) { store.showToast(e.message) }
+  finally { testBusy.value = false }
+}
+
 // ===== 登录账号密码 =====
 const authUsername = ref('')
 const oldPassword = ref('')
@@ -86,7 +98,10 @@ async function changeAuth() {
           <input type="checkbox" v-model="autoCheckin" />
         </label>
       </div>
-      <button class="neu-btn neu-btn-primary" :disabled="busy" @click="save">保存设置</button>
+      <div class="btn-row">
+        <button class="neu-btn neu-btn-primary" :disabled="busy" @click="save">保存设置</button>
+        <button class="neu-btn" :disabled="testBusy" @click="testPush">{{ testBusy ? '推送中…' : '测试推送' }}</button>
+      </div>
     </div>
 
     <div class="settings neu">
@@ -126,4 +141,6 @@ async function changeAuth() {
 .time-pickers { display: flex; align-items: center; gap: 8px; max-width: 260px; }
 .time-pickers .neu-input { flex: 1; min-width: 0; }
 .time-pickers .sep { font-weight: 700; color: var(--muted); font-size: 16px; margin: 0 4px; }
+.btn-row { display: flex; gap: 10px; }
+.btn-row .neu-btn { flex: 1; }
 </style>

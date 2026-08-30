@@ -61,6 +61,9 @@ export const api = {
   getSettings: () => req<Settings>('/settings'),
   saveSettings: (s: Settings) =>
     req<Settings>('/settings', { method: 'POST', body: JSON.stringify(s) }),
+  // 测试推送（token 为空时后端用已保存的默认 token）
+  testPush: (token: string) =>
+    req<{ ok: boolean; title: string; content: string }>('/settings/test-push', { method: 'POST', body: JSON.stringify({ token }) }),
   loginURL: (remark: string, checkinTime: string, pushplusToken: string) =>
     req<LoginURLResp>('/login/url', { method: 'POST', body: JSON.stringify({ remark, checkinTime, pushplusToken }) }),
   loginCallback: (callbackUrl: string, machineId: string, deviceId: string, privateKeyPem: string, publicKeyPem: string, remark: string, checkinTime: string, pushplusToken: string) =>

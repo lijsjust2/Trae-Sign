@@ -48,8 +48,8 @@ func (s *Scheduler) loop() {
 }
 
 // tick 检查当前 HH:mm 是否匹配某账号签到时间，且今日未签到则签到。
-// 推送分组：默认组（用默认签到时间 + 用默认 pushplus token）批量签到+合并推送；
-// 自定义组（自定义时间或自定义 token）单独签到+单独推送。
+// 推送分组仅看 pushplus token：默认组（未单独设置 token，用默认）批量签到+合并推送；
+// 自定义组（单独设置 token）单独签到+单独推送。
 func (s *Scheduler) tick() {
 	settings := s.Store.GetSettings()
 	if !settings.AutoCheckin {
@@ -84,10 +84,8 @@ func (s *Scheduler) tick() {
 			continue
 		}
 
-		// 分组：默认时间（空或等于默认）+ 用默认 pushplus（无自定义 token）→ 默认组
-		isDefaultTime := a.CheckinTime == "" || a.CheckinTime == settings.DefaultCheckinTime
-		isDefaultPush := a.PushPlusToken == ""
-		if isDefaultTime && isDefaultPush && atPoint {
+		// 分组仅看 pushplus token：未单独设置（用默认）→ 默认组合并推送；单独设置 → 单独推送
+		if a.PushPlusToken == "" {
 			defaultBatch = append(defaultBatch, a.ID)
 		} else {
 			customIDs = append(customIDs, a.ID)

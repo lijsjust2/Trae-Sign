@@ -53,6 +53,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("DELETE /api/logs", d.requireAuth(d.clearLogs))
 	mux.HandleFunc("GET /api/settings", d.requireAuth(d.getSettings))
 	mux.HandleFunc("POST /api/settings", d.requireAuth(d.saveSettings))
+	mux.HandleFunc("POST /api/settings/test-push", d.requireAuth(d.testPush))
 	mux.HandleFunc("POST /api/login/url", d.requireAuth(d.loginURL))
 	mux.HandleFunc("POST /api/login/callback", d.requireAuth(d.loginCallback))
 
@@ -323,6 +324,29 @@ func (d *Deps) saveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, d.Store.SaveSettings(p))
+}
+
+// testPush 发送一条测试推送，预览默认组合并消息格式。
+// body 可带 {"token":"..."}（未保存前也能测）；为空则用已保存的默认 token。
+func (d *Deps) testPush(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Token string `json:"token"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	token := req.Token
+	if token == "" {
+		token = d.Store.GetSettings().DefaultPushPlusToken
+	}
+	if token == "" {
+		jsonError(w, http.StatusBadRequest, "请先填写默认 PushPlus Token")
+		return
+	}
+	title, content := d.Svc.PushPreview()
+	if err := d.Up.PushPlus(token, title, content); err != nil {
+		jsonError(w, http.StatusBadGateway, "推送失败: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "title": title, "content": content})
 }
 
 // ===== OAuth 登录 =====

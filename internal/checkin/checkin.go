@@ -104,7 +104,7 @@ func (s *Service) CheckinAccount(id string, pushSelf bool) (Result, error) {
 		Remain:      cr.Remain,
 	})
 
-	// 推送该账号结果（仅自定义组走这里；默认组由 CheckinBatch 合并推送）
+	// 推送该账号结果（自定义 token 组与手动单账号签到走这里；默认 token 组由 CheckinBatch 合并推送）
 	if pushSelf {
 		token := acc.PushPlusToken
 		if token == "" {
@@ -133,7 +133,7 @@ func statusText(s string) string {
 	}
 }
 
-// CheckinBatch 对一批账号串行签到，可选合并推送（用于默认组：同签到时间 + 同默认 token）。
+// CheckinBatch 对一批账号串行签到，可选合并推送（用于默认组：均使用默认 pushplus token）。
 // 合并推送时一条消息列出所有账号明细，标题用"TRAE 签到：<总积分>"。
 func (s *Service) CheckinBatch(ids []string, mergedPush bool) []Result {
 	var results []Result
@@ -159,7 +159,7 @@ func (s *Service) CheckinBatch(ids []string, mergedPush bool) []Result {
 }
 
 // buildMergedMessage 构造默认组合并推送的标题和内容。
-// 标题用所有账号最新总积分之和；内容包含总积分、总获得积分和每账号明细。
+// 标题"TRAE签到：获得积分X"（X 为本次签到获得总积分）；内容含总积分和每账号明细。
 func buildMergedMessage(results []Result) (title, content string) {
 	var totalRemain, totalEarned int64
 	for _, r := range results {
@@ -169,24 +169,38 @@ func buildMergedMessage(results []Result) (title, content string) {
 	var b strings.Builder
 	fmt.Fprintf(&b, "最新总积分 %d，签到获得 %d 积分\n明细如下：\n", totalRemain, totalEarned)
 	for i, r := range results {
-		fmt.Fprintf(&b, "%d、%s +%d 当前总积分 %d\n", i+1, r.Name, r.Earned, r.Remain)
+		fmt.Fprintf(&b, "%d、账号%s，签到+%d积分 当前总积分 %d\n", i+1, r.Name, r.Earned, r.Remain)
 	}
-	return fmt.Sprintf("TRAE 签到：%d", totalRemain), b.String()
+	return fmt.Sprintf("TRAE签到：获得积分%d", totalEarned), b.String()
 }
 
-// isDefaultGroup 判断账号是否属于默认组（用默认签到时间 + 用默认 pushplus token）。
-// 默认组合并一条推送；自定义组（自定义时间或自定义 token）单独推送。
-func isDefaultGroup(a store.PublicAccount, settings store.Settings) bool {
-	isDefaultTime := a.CheckinTime == "" || a.CheckinTime == settings.DefaultCheckinTime
-	isDefaultPush := a.PushPlusToken == ""
-	return isDefaultTime && isDefaultPush
+// PushPreview 构造默认组合并推送的预览消息（用账号当前积分数据模拟，供设置页测试推送）。
+func (s *Service) PushPreview() (title, content string) {
+	var results []Result
+	for _, a := range s.Store.ListAccounts() {
+		if !a.Enabled || a.PushPlusToken != "" {
+			continue
+		}
+		results = append(results, Result{Name: displayName(a.Account), Earned: a.TodayEarned, Remain: a.TotalCredits})
+	}
+	if len(results) == 0 {
+		return "TRAE签到：测试推送",
+			"【测试推送】当前没有使用默认 PushPlus Token 的启用账号。\n正式签到时，这类账号的汇总推送格式与此一致。"
+	}
+	_, detail := buildMergedMessage(results)
+	return "TRAE签到：测试推送", "【测试推送】预览合并推送效果：\n" + detail
 }
 
-// CheckinAll 对所有启用账号签到，按推送策略分组：
-//   - 默认组（默认时间 + 默认 token）：批量串行签到 + 合并一条推送
-//   - 自定义组（自定义时间或自定义 token）：单独签到 + 单独推送
+// isDefaultGroup 判断账号是否属于默认组（未单独设置 pushplus token，即使用默认 token）。
+// 默认组合并一条推送；自定义组（单独设置 token）单独推送。
+func isDefaultGroup(a store.PublicAccount) bool {
+	return a.PushPlusToken == ""
+}
+
+// CheckinAll 对所有启用账号签到，按推送策略分组（仅看 pushplus token）：
+//   - 默认组（未单独设置 token，用默认）：批量串行签到 + 合并一条推送
+//   - 自定义组（单独设置 token）：单独签到 + 单独推送
 func (s *Service) CheckinAll() []Result {
-	settings := s.Store.GetSettings()
 	accounts := s.Store.ListAccounts()
 
 	var defaultBatch, customIDs []string
@@ -194,7 +208,7 @@ func (s *Service) CheckinAll() []Result {
 		if !a.Enabled {
 			continue
 		}
-		if isDefaultGroup(a, settings) {
+		if isDefaultGroup(a) {
 			defaultBatch = append(defaultBatch, a.ID)
 		} else {
 			customIDs = append(customIDs, a.ID)
